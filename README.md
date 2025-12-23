@@ -119,3 +119,42 @@ services:
 2.  **Middlewares**: La línea `middlewares=authelia,security-headers` es la que activa la protección.
     *   `authelia`: Redirige al login si no estás autenticado.
     *   `security-headers`: Añade cabeceras de seguridad extra.
+
+---
+
+## 🤝 Contribuciones
+
+¡Las contribuciones son bienvenidas! Por favor:
+
+1.  🍴 **Fork** el repositorio.
+2.  🌿 **Crea una rama** para tu feature (`git checkout -b feature/AmazingFeature`).
+3.  💾 **Commit** tus cambios (`git commit -m 'Add some AmazingFeature'`).
+4.  📤 **Push** a la rama (`git push origin feature/AmazingFeature`).
+5.  🔄 Abre un **Pull Request**.
+
+## 📄 Licencia
+
+Este proyecto está licenciado bajo la **Licencia GPL v3.0** - ver el archivo [LICENSE](LICENSE) para más detalles.
+
+## 👨‍💻 Autor
+
+**TiiZss** - [GitHub Profile](https://github.com/TiiZss)
+
+## 🙏 Agradecimientos
+
+*   Comunidad de **Traefik** y **Authelia** por su excelente documentación.
+*   Contribuidores y usuarios del proyecto que reportan issues y mejoras.
+
+## 📈 Estadísticas del Proyecto
+
+*   🎯 **Versión Actual**: 2.0 (Authelia Edition)
+*   🐚 **Stack**: Bash, Docker, Docker Compose
+*   📦 **Contenedores**: Traefik v3, Authelia, Redis, Whoami
+*   🌟 **Características**: Autenticación 2FA, SSO, Certificados Wildcard, Cabeceras de Seguridad
+*   📄 **Archivos Generados**: Estructura automática de carpetas y configuración YAML
+*   🛠️ **Scripts de Instalación**: Despliegue local y remoto automatizado
+
+---
+
+*   ⭐ **Si este proyecto te ha sido útil, no olvides darle una estrella en GitHub!**
+
