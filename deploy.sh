@@ -9,6 +9,9 @@
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 
+# Robustez
+set -euo pipefail
+
 # Cargar variables de entorno desde .env si existe
 if [ -f .env ]; then
     echo "Cargando variables desde .env..."
@@ -22,8 +25,9 @@ REMOTE_PASS="${DEPLOY_PASS:-}"
 
 # Verificación de variables obligatorias
 MISSING_VARS=0
-for var in REMOTE_IP REMOTE_PASS TRAEFIK_HOST AUTH_HOST ACME_EMAIL DASH_USER DASH_PASS; do
-    if [ -z "${!var}" ]; then
+# REMOTE_PASS es opcional si se usan claves SSH
+for var in REMOTE_IP TRAEFIK_HOST AUTH_HOST ACME_EMAIL DASH_USER DASH_PASS; do
+    if [ -z "${!var:-}" ]; then
         echo -e "${RED}Error: La variable de entorno $var no está definida.${NC}"
         MISSING_VARS=1
     fi
@@ -46,11 +50,15 @@ NC='\033[0m'
 
 echo -e "${GREEN}=== Iniciando Despliegue a ${REMOTE_IP} ===${NC}"
 
-# 1. Verificar sshpass (necesario para pasar contraseña por script)
-if ! command -v sshpass &> /dev/null; then
-    echo -e "${RED}Error: sshpass no está instalado.${NC}"
-    echo "Instálalo con: sudo apt install sshpass (o usa Git Bash en Windows con sshpass)"
-    exit 1
+# 1. Verificar conexión SSH
+USE_SSHPASS=0
+if [ -n "$REMOTE_PASS" ]; then
+    if ! command -v sshpass &> /dev/null; then
+        echo -e "${RED}Error: sshpass no está instalado y se proporcionó contraseña.${NC}"
+        echo "Instálalo o usa claves SSH."
+        exit 1
+    fi
+    USE_SSHPASS=1
 fi
 
 # 2. Aceptar fingerprint del servidor automáticamente (evita prompt yes/no)
@@ -60,7 +68,11 @@ ssh-keyscan -H $REMOTE_IP >> ~/.ssh/known_hosts 2>/dev/null
 
 # 3. Copiar script de instalación
 echo "Copiando instalador al servidor..."
-sshpass -p "$REMOTE_PASS" scp -o StrictHostKeyChecking=no instalar_traefik.sh $REMOTE_USER@$REMOTE_IP:/root/instalar_traefik.sh
+if [ $USE_SSHPASS -eq 1 ]; then
+    sshpass -p "$REMOTE_PASS" scp -o StrictHostKeyChecking=no instalar_traefik.sh $REMOTE_USER@$REMOTE_IP:/root/instalar_traefik.sh
+else
+    scp -o StrictHostKeyChecking=no instalar_traefik.sh $REMOTE_USER@$REMOTE_IP:/root/instalar_traefik.sh
+fi
 
 # 4. Ejecutar instalación remotamente
 echo "Ejecutando instalación en remoto..."
@@ -94,6 +106,10 @@ REMOTE_CMD="
     /root/instalar_traefik.sh
 "
 
-sshpass -p "$REMOTE_PASS" ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_IP "$REMOTE_CMD"
+if [ $USE_SSHPASS -eq 1 ]; then
+    sshpass -p "$REMOTE_PASS" ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_IP "$REMOTE_CMD"
+else
+    ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_IP "$REMOTE_CMD"
+fi
 
 echo -e "${GREEN}=== Despliegue Finalizado ===${NC}"

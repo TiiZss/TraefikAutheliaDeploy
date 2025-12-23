@@ -1,4 +1,4 @@
-# Guía de Instalación: Traefik v3 + Authelia
+# 🛡️ Despliegue Automático: Traefik v3 + Authelia
 
 <div align="center">
 
@@ -10,151 +10,131 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/TiiZss/TraefikAutheliaDeploy)](https://github.com/TiiZss/TraefikAutheliaDeploy/issues)
 [![GitHub stars](https://img.shields.io/github/stars/TiiZss/TraefikAutheliaDeploy)](https://github.com/TiiZss/TraefikAutheliaDeploy/stargazers)
-[![GitHub last commit](https://img.shields.io/github/last-commit/TiiZss/TraefikAutheliaDeploy)](https://github.com/TiiZss/TraefikAutheliaDeploy/commits/main)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FP-yellow.svg)](https://www.buymeacoffee.com/TiiZss)
 
 </div>
 
-Este documento detalla las mejoras de seguridad y la integración de **Authelia** en el script de instalación automática `instalar_traefik.sh`.
+Esta herramienta automatiza el despliegue de un **Proxy Inverso Seguro** utilizando **Traefik v3** y **Authelia**. Proporciona una capa de seguridad robusta (2FA, SSO) para todos tus servicios Docker con una configuración mínima.
 
-## Diferencias Clave
-| Característica | Antes (Basic Auth) | Ahora (Authelia) |
-| :--- | :--- | :--- |
-| **Login** | Popup básico del navegador | Interfaz web moderna |
-| **Seguridad** | Contraseña simple | **2FA (TOTP)**, bloqueo fuerza bruta |
-| **Gestión** | Hash manual en archivo | Base de datos de usuarios (SQLite) + Cookies seguras |
-| **Alcance** | Solo credenciales básicas | **SSO** (Single Sign-On) para múltiples servicios |
+---
 
-## Estructura de Archivos Generada
-El script ahora crea una estructura más completa para gestionar la configuración de Authelia por separado.
-```text
-traefik/
-├── .env                     # Secretos (Authelia requiere varios tokens)
-├── docker-compose.yml       # Servicios: Traefik + Authelia
-├── acme.json                # Certificados SSL
-└── authelia/                # [NUEVO] Carpeta de configuración
-    ├── configuration.yml    # Reglas de acceso y config del servidor
-    ├── users_database.yml   # Usuarios y hashes de contraseña
-    └── notification.txt     # [IMPORTANTE] Aquí llegan los emails simulados
+## 🚀 Características
+
+| Característica | Descripción |
+| :--- | :--- |
+| **Autenticación Moderna** | Reemplaza Basic Auth con un portal de login moderno y seguro. |
+| **Seguridad Avanzada** | Autenticación de Dos Factores (**2FA**), protección contra fuerza bruta y bloqueo de intentos fallidos. |
+| **Single Sign-On (SSO)** | Inicia sesión una vez y accede a todos tus subdominios protegidos. |
+| **SSL Automático** | Gestión de certificados Let's Encrypt para HTTPS en todos los servicios. |
+| **Despliegue Fácil** | Scripts para instalación local (`instalar_traefik.sh`) y remota (`deploy.sh`). |
+| **Backups** | Copia de seguridad automática de configuración (rotación de últimos 3). |
+
+## 📋 Requisitos Previos
+
+*   **Servidor Linux**: Ubuntu/Debian recomendado (o WSL en Windows).
+*   **Docker & Docker Compose**: El script intentará instalarlos si no existen (plugin version).
+*   **Dominios**: Necesitas al menos dos subdominios apuntando a tu servidor:
+    *   `monitor.midominio.com` (para el Dashboard de Traefik)
+    *   `auth.midominio.com` (para el Portal de Login)
+*   **Puertos Libres**: El servidor debe tener los puertos `80` y `443` disponibles (el script lo verificará).
+
+## 🛠️ Instalación
+
+### Opción A: Instalación Local o Interactiva
+Si ya estás dentro del servidor SSH:
+
+```bash
+chmod +x instalar_traefik.sh
+./instalar_traefik.sh
 ```
+El asistente te pedirá paso a paso los dominios, email y credenciales.
 
-## Flujo de Verificación (Paso a Paso)
+### Opción B: Despliegue Remoto (`deploy.sh`)
+Para desplegar desde tu máquina local a un servidor remoto **sin entrar por SSH manualmente**.
 
-1.  **Ejecución**:
-    Correr el script `./instalar_traefik.sh`. Te pedirá dos dominios (Dashboard y Auth).
-
-2.  **Validación de Despliegue**:
-    ```bash
-    docker compose ps
-    ```
-    Debes ver dos contenedores: `traefik` y `authelia` en estado `Up`.
-
-3.  **Primer Inicio de Sesión (Registro 2FA)**:
-    *   Entra a tu dashboard (ej. `monitor.misitio.com`).
-    *   Serás redirigido automáticamente a `auth.misitio.com`.
-    *   Loguéate con el usuario y la contraseña que definiste.
-    *   **Authelia te pedirá registrar tu dispositivo 2FA**.
-    *   Haz clic en "Register". Authelia te dirá ser ha enviado un email.
-    *   **Truco**: Como no hemos configurado SMTP real, el email está en un archivo local.
-        ```bash
-        cat traefik/authelia/notification.txt
-        ```
-    *   Copia el enlace que aparece en ese archivo y ábrelo en tu navegador para completar el registro (escanea el QR con Google Authenticator/Authy).
-
-4.  **Panel de Traefik**:
-    Una vez autenticado, verás el dashboard de Traefik. ¡Estás dentro!
-
-## Solución de Problemas
-*   **Error 502/504 en el Auth**: Authelia tarda unos segundos en arrancar (generando claves RSA). Espera 30 segundos.
-*   **Hash Incorrecto**: El script usa un contenedor Docker para generar hashes Argon2 compatibles. Si cambiase la versión de Authelia drásticamente, podría requerir ajustes.
-
-## Despliegue Remoto (`deploy.sh`)
-
-Se ha creado un script `deploy.sh` que automatiza la instalación en el servidor remoto.
-
-### Requisitos
-1.  **Entorno Unix/Linux**: WSL o Git Bash en Windows.
-2.  **`sshpass`**: Necesario para el login automático con contraseña.
-
-### Uso Seguro (Variables de Entorno)
-1.  Copia el archivo de ejemplo:
+1.  Copia y configura el archivo de entorno:
     ```bash
     cp .env.example .env
+    nano .env  # Define IP, Usuario, Dominios, etc.
     ```
-2.  Edita `.env` con la IP de tu servidor y tus credenciales.
-3.  Ejecuta el script de despliegue:
+2.  Ejecuta el despliegue:
     ```bash
     bash deploy.sh
     ```
-    *El script leerá automáticamente las variables del archivo `.env`.*
+    *Nota: Si tienes claves SSH configuradas, no necesitas definir contraseña. Si no, necesitarás `sshpass`.*
 
-El script copiará el instalador, detendrá contenedores conflictivos en el puerto 80/443 y ejecutará la instalación de forma desatendida.
+## 📂 Estructura Generada
 
-## Cómo añadir una nueva aplicación
+El script crea una carpeta `traefik/` con todo lo necesario:
 
-Para proteger una nueva aplicación con Authelia, simplemente añádela a tu `docker-compose.yml` (o crea uno nuevo en la misma red `proxy`) con las siguientes etiquetas (labels).
+```text
+traefik/
+├── .env                     # Secretos de Authelia y Traefik
+├── docker-compose.yml       # Definición de servicios
+├── acme.json                # Almacén de certificados SSL
+└── authelia/                # Configuración persistente de Authelia
+    ├── configuration.yml    # Reglas y políticas de acceso
+    ├── users_database.yml   # Base de datos de usuarios (Hashes Argon2)
+    └── notification.txt     # Buzón local para tokens 2FA (simulación de email)
+```
+*Los backups anteriores se rotan automáticamente (mantiene los 3 más recientes).*
 
-### Ejemplo: Whoami (App de prueba)
+## 🔐 Primer Inicio de Sesión (Importante)
+
+1.  Accede a `https://monitor.midominio.com`.
+2.  Serás redirigido al portal de **Authelia**.
+3.  Ingresa tus credenciales de administrador.
+4.  **Registro 2FA**: Authelia te pedirá registrar un dispositivo.
+    *   Haz clic en "Register".
+    *   **Recupera el token** del archivo local en el servidor:
+        ```bash
+        cat traefik/authelia/notification.txt
+        ```
+    *   Usa el enlace proporcionado para escanear el QR con Google Authenticator o Authy.
+
+## 🛡️ Cómo Proteger Nuevos Contenedores
+
+Para añadir autenticación a cualquier otro contenedor Docker, simplemente añade estas `labels` en tu `docker-compose.yml`:
 
 ```yaml
 services:
-  whoami:
-    image: traefik/whoami
-    container_name: whoami
-    restart: unless-stopped
+  mi-app:
+    image: nginx
     networks:
       - proxy
     labels:
       - "traefik.enable=true"
-      # Configuración del Router
-      - "traefik.http.routers.whoami.rule=Host(`whoami.tu-dominio.com`)"
-      - "traefik.http.routers.whoami.entrypoints=websecure"
-      - "traefik.http.routers.whoami.tls.certresolver=myresolver"
-      
-      # [IMPORTANTE] Protección con Authelia
-      - "traefik.http.routers.whoami.middlewares=authelia,security-headers"
+      - "traefik.http.routers.app.rule=Host(`app.midominio.com`)"
+      - "traefik.http.routers.app.entrypoints=websecure"
+      - "traefik.http.routers.app.tls.certresolver=myresolver"
+      # LA LÍNEA MÁGICA:
+      - "traefik.http.routers.app.middlewares=authelia,security-headers"
 ```
-
-### Puntos Clave
-1.  **Red**: La aplicación debe estar en la red `proxy` para que Traefik la vea.
-2.  **Middlewares**: La línea `middlewares=authelia,security-headers` es la que activa la protección.
-    *   `authelia`: Redirige al login si no estás autenticado.
-    *   `security-headers`: Añade cabeceras de seguridad extra.
-
----
 
 ## 🤝 Contribuciones
 
-¡Las contribuciones son bienvenidas! Por favor:
+¡Las contribuciones son bienvenidas! Sigue estos pasos:
 
 1.  🍴 **Fork** el repositorio.
-2.  🌿 **Crea una rama** para tu feature (`git checkout -b feature/AmazingFeature`).
-3.  💾 **Commit** tus cambios (`git commit -m 'Add some AmazingFeature'`).
-4.  📤 **Push** a la rama (`git push origin feature/AmazingFeature`).
+2.  🌿 **Crea una rama** (`git checkout -b feature/NuevaMejora`).
+3.  💾 **Commit** tus cambios (`git commit -m 'Añadir nueva funcionalidad'`).
+4.  📤 **Push** a la rama (`git push origin feature/NuevaMejora`).
 5.  🔄 Abre un **Pull Request**.
-
-## 📄 Licencia
-
-Este proyecto está licenciado bajo la **Licencia GPL v3.0** - ver el archivo [LICENSE](LICENSE) para más detalles.
-
-## 👨‍💻 Autor
-
-**TiiZss** - [GitHub Profile](https://github.com/TiiZss)
-
-## 🙏 Agradecimientos
-
-*   Comunidad de **Traefik** y **Authelia** por su excelente documentación.
-*   Contribuidores y usuarios del proyecto que reportan issues y mejoras.
 
 ## 📈 Estadísticas del Proyecto
 
-*   🎯 **Versión Actual**: 2.0 (Authelia Edition)
-*   🐚 **Stack**: Bash, Docker, Docker Compose
-*   📦 **Contenedores**: Traefik v3, Authelia, Redis, Whoami
-*   🌟 **Características**: Autenticación 2FA, SSO, Certificados Wildcard, Cabeceras de Seguridad
-*   📄 **Archivos Generados**: Estructura automática de carpetas y configuración YAML
-*   🛠️ **Scripts de Instalación**: Despliegue local y remoto automatizado
+*   🎯 **Versión**: 2.0 (Authelia Edition)
+*   🐚 **Stack**: Bash, Docker, Traefik v3, Authelia
+*   📦 **Componentes**: Redis, Whoami, Argon2id
+*   📄 **Licencia**: GPL v3.0
+
+## 👨‍💻 Autor y Soporte
+
+Desarrollado por **[TiiZss](https://github.com/TiiZss)**.
+
+Si este proyecto te ha ahorrado tiempo o te ha servido de ayuda, ¡aprecio mucho tu apoyo!
+
+<a href="https://www.buymeacoffee.com/TiiZss" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 ---
-
-*   ⭐ **Si este proyecto te ha sido útil, no olvides darle una estrella en GitHub!**
-
+*Recuerda dar una ⭐ estrella al repositorio si te ha gustado.*

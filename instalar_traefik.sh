@@ -9,6 +9,15 @@
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 
+# Robustez: Detener ante errores
+set -euo pipefail
+
+# Versiones
+TRAEFIK_VERSION="v3.0"
+AUTHELIA_VERSION="4.36.1"
+COMPOSE_VERSION="v2.29.0"
+
+
 # Colores para output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -27,6 +36,18 @@ echo -e "${BLUE}=== Iniciando Instalador de Traefik v3 + Authelia ===${NC}"
 # 1. VERIFICACIONES PREVIAS
 # ==========================================
 echo -e "\n${GREEN}[Paso 1/7] Verificando requisitos...${NC}"
+
+# Verificar puertos 80/443
+echo "Verificando puertos..."
+if command -v netstat >/dev/null; then
+    if netstat -tuln | grep -E ':80 |:443 ' >/dev/null; then
+        echo -e "${YELLOW}ADVERTENCIA: Los puertos 80 o 443 parecen estar en uso.${NC}"
+        echo -e "${YELLOW}Esto podría causar conflictos con Traefik.${NC}"
+        read -p "¿Deseas continuar de todos modos? (s/n): " -r
+        if [[ ! $REPLY =~ ^[Ss]$ ]]; then exit 1; fi
+    fi
+fi
+
 
 # Verificar Docker
 if ! [ -x "$(command -v docker)" ]; then
@@ -91,18 +112,21 @@ cd traefik || exit
 echo "Instalando Docker Compose V2 Plugin..."
 mkdir -p ~/.docker/cli-plugins/
 if [ ! -f "$HOME/.docker/cli-plugins/docker-compose" ]; then
-    curl -SL https://github.com/docker/compose/releases/download/v2.29.0/docker-compose-linux-x86_64 -o ~/.docker/cli-plugins/docker-compose
+    curl -SL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-x86_64" -o ~/.docker/cli-plugins/docker-compose
     chmod +x ~/.docker/cli-plugins/docker-compose
 fi
 COMPOSE_CMD="$HOME/.docker/cli-plugins/docker-compose"
 echo -e "Usando: ${GREEN}Docker Compose V2 (Plugin Binary)${NC}"
 
-# Backup automático si existen archivos
+# Backup con rotación
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 for file in ".env" "docker-compose.yml" "authelia/configuration.yml" "authelia/users_database.yml"; do
     if [ -f "$file" ]; then
         echo -e "${YELLOW}Respaldando $file a $file.bak_$TIMESTAMP${NC}"
         cp "$file" "$file.bak_$TIMESTAMP"
+        
+        # Mantener solo los últimos 3 backups
+        ls -t "$file.bak_"* 2>/dev/null | tail -n +4 | xargs -r rm --
     fi
 done
 
@@ -133,7 +157,7 @@ echo "Secretos de sesión/storage generados aleatoriamente."
 # Generar Hash de contraseña para Authelia (Argon2id)
 echo "Generando hash seguro (Argon2) para el usuario..."
 # Usamos la imagen oficial para asegurar compatibilidad total del hash
-AUTHELIA_HASH=$(docker run --rm authelia/authelia:4.36.1 authelia hash-password "$DASH_PASS" | awk '{print $NF}' | tr -d '\r')
+AUTHELIA_HASH=$(docker run --rm "authelia/authelia:${AUTHELIA_VERSION}" authelia hash-password "$DASH_PASS" | awk '{print $NF}' | tr -d '\r')
 
 echo "Hash generado correctamente."
 
@@ -238,7 +262,7 @@ EOF
 cat <<EOF > docker-compose.yml
 services:
   traefik:
-    image: "traefik:v3.0"
+    image: "traefik:${TRAEFIK_VERSION}"
     container_name: "traefik"
     restart: always
     security_opt:
@@ -289,7 +313,7 @@ services:
       - "traefik.http.middlewares.security-headers.headers.framedeny=true"
 
   authelia:
-    image: authelia/authelia:4.36.1
+    image: "authelia/authelia:${AUTHELIA_VERSION}"
     container_name: authelia
     restart: always
     volumes:
