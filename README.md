@@ -1,5 +1,19 @@
 # Guía de Instalación: Traefik v3 + Authelia
 
+<div align="center">
+
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+![Traefik](https://img.shields.io/badge/Traefik-%2329313D.svg?style=for-the-badge&logo=traefik&logoColor=white)
+![Authelia](https://img.shields.io/badge/Authelia-%2321287F.svg?style=for-the-badge&logo=authelia&logoColor=white)
+![Bash](https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white)
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![GitHub issues](https://img.shields.io/github/issues/TiiZss/TraefikAutheliaDeploy)](https://github.com/TiiZss/TraefikAutheliaDeploy/issues)
+[![GitHub stars](https://img.shields.io/github/stars/TiiZss/TraefikAutheliaDeploy)](https://github.com/TiiZss/TraefikAutheliaDeploy/stargazers)
+[![GitHub last commit](https://img.shields.io/github/last-commit/TiiZss/TraefikAutheliaDeploy)](https://github.com/TiiZss/TraefikAutheliaDeploy/commits/main)
+
+</div>
+
 Este documento detalla las mejoras de seguridad y la integración de **Authelia** en el script de instalación automática `instalar_traefik.sh`.
 
 ## Diferencias Clave
