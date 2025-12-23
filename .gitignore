@@ -1,0 +1,25 @@
+# Secrets
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDES
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary scripts (if any remain)
+*backup*
+*bak
