@@ -12,6 +12,9 @@
 [![GitHub stars](https://img.shields.io/github/stars/TiiZss/TraefikAutheliaDeploy)](https://github.com/TiiZss/TraefikAutheliaDeploy/stargazers)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FP-yellow.svg)](https://www.buymeacoffee.com/TiiZss)
 
+> [!TIP]
+> **New in v3**: This updated version supports Docker Engine v27+, Traefik v3 (latest), and includes robust permission handling for Authelia on strict environments.
+
 </div>
 
 Esta herramienta automatiza el despliegue de un **Proxy Inverso Seguro** utilizando **Traefik v3** y **Authelia**. Proporciona una capa de seguridad robusta (2FA, SSO) para todos tus servicios Docker con una configuración mínima.

@@ -66,7 +66,16 @@ echo "Aceptando fingerprint del servidor..."
 mkdir -p ~/.ssh
 ssh-keyscan -H $REMOTE_IP >> ~/.ssh/known_hosts 2>/dev/null
 
-# 3. Copiar script de instalación
+
+# 3. Limpiar versión anterior y Copiar script
+echo "Limpiando versión anterior..."
+if [ $USE_SSHPASS -eq 1 ]; then
+    sshpass -p "$REMOTE_PASS" ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_IP "rm -f /root/instalar_traefik.sh"
+else
+    ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_IP "rm -f /root/instalar_traefik.sh"
+fi
+
+# Copiar script de instalación
 echo "Copiando instalador al servidor..."
 if [ $USE_SSHPASS -eq 1 ]; then
     sshpass -p "$REMOTE_PASS" scp -o StrictHostKeyChecking=no instalar_traefik.sh $REMOTE_USER@$REMOTE_IP:/root/instalar_traefik.sh
@@ -83,17 +92,6 @@ echo "Nota: Se intentará detener contenedores que ocupen el puerto 80/443."
 # 2. Detener contenedor proxy existente (si existe) para liberar puertos 80/443
 # 3. Ejecutar script en modo no interactivo (pasando variables)
 REMOTE_CMD="
-    # Corregir finales de línea (CRLF -> LF) por si se copió desde Windows
-    sed -i 's/\r$//' /root/instalar_traefik.sh;
-    chmod +x /root/instalar_traefik.sh;
-    
-    # Detener servicios conflictivos si existen
-    if docker ps -a | grep -q ':80->'; then
-        echo 'Detectado servicio en puerto 80. Deteniendo contenedores conflictivos...';
-        # Busca contenedores escuchando en puerto 80 y los para
-        docker stop \$(docker ps -q --filter 'publish=80') 2>/dev/null || true
-    fi
-    
     # Ejecutar instalador
     export TRAEFIK_HOST='$TRAEFIK_HOST'
     export AUTH_HOST='$AUTH_HOST'
@@ -101,6 +99,9 @@ REMOTE_CMD="
     export DASH_USER='$DASH_USER'
     export DASH_PASS='$DASH_PASS'
     export INPUT_ROOT_DOMAIN='tiizss.com' # Forzar dominio raíz
+    
+    # Asegurar formato Unix (eliminar \r si se subió desde Windows)
+    sed -i 's/\r$//' /root/instalar_traefik.sh
     
     # Ejecutar con 'yes' para aceptar prompts automáticos si quedase alguno
     /root/instalar_traefik.sh

@@ -13,7 +13,8 @@ export LANG=C.UTF-8
 set -euo pipefail
 
 # Versiones
-TRAEFIK_VERSION="v3.0"
+# Versiones
+TRAEFIK_VERSION="v3"
 AUTHELIA_VERSION="4.36.1"
 COMPOSE_VERSION="v2.29.0"
 
@@ -27,15 +28,33 @@ NC='\033[0m' # No Color
 
 # Función para generar secretos aleatorios
 generate_secret() {
-    tr -cd 'a-z0-9' < /dev/urandom | head -c 32
+    # Disable pipefail to avoid SIGPIPE error when head closes stream while tr is writing
+    set +o pipefail
+    LC_ALL=C tr -cd 'a-z0-9' < /dev/urandom | head -c 32
+    set -o pipefail
 }
+
+
+# Sanitizar inputs para evitar comillas dobles (si se pasaron vía export)
+if [ -n "${TRAEFIK_HOST:-}" ]; then TRAEFIK_HOST=$(echo "$TRAEFIK_HOST" | tr -d '"'"'"); fi
+if [ -n "${AUTH_HOST:-}" ]; then AUTH_HOST=$(echo "$AUTH_HOST" | tr -d '"'"'"); fi
+if [ -n "${ACME_EMAIL:-}" ]; then ACME_EMAIL=$(echo "$ACME_EMAIL" | tr -d '"'"'"); fi
+if [ -n "${DASH_USER:-}" ]; then DASH_USER=$(echo "$DASH_USER" | tr -d '"'"'"); fi
+if [ -n "${DASH_PASS:-}" ]; then DASH_PASS=$(echo "$DASH_PASS" | tr -d '"'"'"); fi
+if [ -n "${INPUT_ROOT_DOMAIN:-}" ]; then INPUT_ROOT_DOMAIN=$(echo "$INPUT_ROOT_DOMAIN" | tr -d '"'"'"); fi
 
 echo -e "${BLUE}=== Iniciando Instalador de Traefik v3 + Authelia ===${NC}"
 
 # ==========================================
-# 1. VERIFICACIONES PREVIAS
+# 1. VERIFICACIONES PREVIAS Y ACTUALIZACIÓN
 # ==========================================
-echo -e "\n${GREEN}[Paso 1/7] Verificando requisitos...${NC}"
+echo -e "\n${GREEN}[Paso 1/7] Actualizando sistema y verificando requisitos...${NC}"
+
+# Actualizar sistema operativo
+echo "Actualizando índices de paquetes (apt update)..."
+apt-get update -qq
+echo "Actualizando paquetes instalados (apt upgrade)..."
+DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
 # Verificar puertos 80/443
 echo "Verificando puertos..."
@@ -50,9 +69,19 @@ fi
 
 
 # Verificar Docker
+# Verificar Docker
 if ! [ -x "$(command -v docker)" ]; then
-  echo -e "${RED}Error: Docker no está instalado.${NC}"
-  exit 1
+  echo -e "${YELLOW}Docker no está instalado. Instalando automáticamente...${NC}"
+  curl -fsSL https://get.docker.com -o get-docker.sh
+  sh get-docker.sh
+  rm get-docker.sh
+  
+  # Verificar de nuevo
+  if ! [ -x "$(command -v docker)" ]; then
+      echo -e "${RED}Error: Falló la instalación automática de Docker.${NC}"
+      exit 1
+  fi
+  echo -e "${GREEN}Docker instalado correctamente.${NC}"
 fi
 
 # Descargar Docker Compose V2 localmente para asegurar compatibilidad
@@ -156,8 +185,24 @@ echo "Secretos de sesión/storage generados aleatoriamente."
 
 # Generar Hash de contraseña para Authelia (Argon2id)
 echo "Generando hash seguro (Argon2) para el usuario..."
-# Usamos la imagen oficial para asegurar compatibilidad total del hash
-AUTHELIA_HASH=$(docker run --rm "authelia/authelia:${AUTHELIA_VERSION}" authelia hash-password "$DASH_PASS" | awk '{print $NF}' | tr -d '\r')
+echo "Descargando imagen de Authelia (puede tardar unos segundos)..."
+docker pull "authelia/authelia:${AUTHELIA_VERSION}"
+
+# Ejecutar generación de hash capturando todo el output
+# Usamos '|| true' para evitar que set -e detenga el script si docker devuelve error (ej. warnings)
+echo "Ejecutando contenedor..."
+RAW_OUTPUT=$(docker run --rm "authelia/authelia:${AUTHELIA_VERSION}" authelia hash-password "$DASH_PASS" 2>&1 || true)
+
+# Extraer el hash buscando el patrón de Argon2
+AUTHELIA_HASH=$(echo "$RAW_OUTPUT" | grep -o '\$argon2id.*' | head -n 1 | tr -d '\r')
+
+# Verificar si se obtuvo el hash
+if [ -z "$AUTHELIA_HASH" ]; then
+     echo -e "${RED}Error: No se pudo generar el hash de Authelia.${NC}"
+     echo "Output recibido del contenedor:"
+     echo "$RAW_OUTPUT"
+     exit 1
+fi
 
 echo "Hash generado correctamente."
 
@@ -238,6 +283,17 @@ notifier:
     filename: /config/notification.txt
 EOF
 
+# Ajustar permisos para evitar errores si el contenedor corre como no-root
+chmod 644 authelia/users_database.yml
+chmod 644 authelia/configuration.yml
+touch authelia/notification.txt
+chmod 666 authelia/notification.txt
+# Permitir que Authelia cree la DB (SQLite) y escriba logs/notificaciones
+# Eliminamos DB antigua si existe por si acaso está corrupta o con permisos root
+rm -f authelia/db.sqlite3
+# Asignamos propietario 1000:1000 (usuario default de Authelia)
+chown -R 1000:1000 authelia || chmod -R 777 authelia
+
 echo "Configuración de Authelia generada."
 
 # ==========================================
@@ -250,6 +306,8 @@ cat <<EOF > .env
 # --- Traefik Settings ---
 TRAEFIK_DASHBOARD_HOST=${TRAEFIK_HOST}
 ACME_EMAIL=${ACME_EMAIL}
+DOCKER_API_VERSION=1.44
+
 
 # --- Authelia Settings ---
 AUTH_HOST=${AUTH_HOST}
@@ -341,9 +399,30 @@ echo "Ajustando permisos de Authelia..."
 chown -R 1000:1000 authelia
 
 # ==========================================
-# 7. DESPLIEGUE FINAL
+# 7. VERIFICACIÓN SSL Y DESPLIEGUE FINAL
 # ==========================================
-echo -e "\n${GREEN}[Paso 7/7] Desplegando servicios...${NC}"
+echo -e "\n${GREEN}[Paso 7/7] Verificando estado SSL y Desplegando...${NC}"
+
+# Check SSL
+if [ -f acme.json ] && [ -s acme.json ]; then
+    echo "Analizando certificados existentes en acme.json..."
+    if grep -q "${TRAEFIK_HOST}" acme.json; then
+         echo -e "${GREEN}✔ Certificado encontrado para ${TRAEFIK_HOST}${NC}"
+    else
+         echo -e "${YELLOW}⚠ Certificado para ${TRAEFIK_HOST} NO encontrado.${NC}"
+         echo "Traefik intentará generarlo automáticamente vía Let's Encrypt."
+    fi
+    
+    if grep -q "${AUTH_HOST}" acme.json; then
+         echo -e "${GREEN}✔ Certificado encontrado para ${AUTH_HOST}${NC}"
+    else
+         echo -e "${YELLOW}⚠ Certificado para ${AUTH_HOST} NO encontrado.${NC}"
+         echo "Traefik intentará generarlo automáticamente vía Let's Encrypt."
+    fi
+else
+    echo "Archivo acme.json vacío o inexistente. Se generarán nuevos certificados."
+fi
+
 $COMPOSE_CMD up -d
 
 echo -e "\n${BLUE}==============================================${NC}"
