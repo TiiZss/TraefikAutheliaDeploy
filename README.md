@@ -130,6 +130,7 @@ services:
 *   🐚 **Stack**: Bash, Docker, Traefik v3, Authelia
 *   📦 **Componentes**: Redis, Whoami, Argon2id
 *   📄 **Licencia**: GPL v3.0
+*   📜 **Historial**: [CHANGELOG.md](CHANGELOG.md)
 
 ## 👨‍💻 Autor y Soporte
 
